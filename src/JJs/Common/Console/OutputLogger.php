@@ -4,8 +4,11 @@ namespace JJs\Common\Console;
 
 use Psr\Log\AbstractLogger;
 use Psr\Log\LogLevel;
-use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Formatter\OutputFormatterInterface;
+use Symfony\Component\Console\Formatter\OutputFormatterStyle;
+use Symfony\Component\Console\Output\OutputInterface;
+use JJs\Common\String\LineBuffer;
 use Exception;
 
 /**
@@ -92,8 +95,25 @@ class OutputLogger extends AbstractLogger
     public function log($level, $message, array $context = array())
     {
         $output = $this->getOutput();
+
+        // Based on the console output verbosity, hide some messages
+        switch ($level) {
+            case LogLevel::DEBUG:
+                if ($output->getVerbosity() < OutputInterface::VERBOSITY_DEBUG) return;
+
+            case LogLevel::INFO:
+                if ($output->getVerbosity() < OutputInterface::VERBOSITY_VERY_VERBOSE) return;
+
+            case LogLevel::NOTICE:
+                if ($output->getVerbosity() < OutputInterface::VERBOSITY_VERBOSE) return;
+
+            case LogLevel::WARNING:
+                if ($output->getVerbosity() < OutputInterface::VERBOSITY_NORMAL) return;
+        }
+        
         $outputFormat = $output->getFormatter();
         $output->setFormatter($this->getFormat());
+        $output->setDecorated($outputFormat->isDecorated());
 
         // Generate a set of token from the context keys
         $placeholders = [];
@@ -105,7 +125,7 @@ class OutputLogger extends AbstractLogger
         LineBuffer::lines(
             strtr($message, $placeholders),
             function ($line) use ($output, $level) {
-                $output->writeLn(sprintf('<%1$s>%2$s</%1$s>'), $level, $line);
+                $output->writeLn(sprintf('<%1$s>%2$s</%1$s>', $level, $line));
             }
         );
 
@@ -115,9 +135,11 @@ class OutputLogger extends AbstractLogger
             LineBuffer::lines(
                 $exception->getTraceAsString(),
                 function ($line) use ($output, $level) {
-                    $output->writeLn(sprintf('<%1$s>%2$s</%1$s>'), $level, $line);
+                    $output->writeLn(sprintf('<%1$s>%2$s</%1$s>', $level, $line));
                 }
             );
         }
+
+        $output->setFormatter($outputFormat);
     }
 }
